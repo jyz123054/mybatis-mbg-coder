@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.test.mbg.mapper.TUserMapper" >
+  <!-- 开启二级缓存，每隔60s刷新，算法FIFO先进先出，最多缓存512个引用	 -->
+  <cache eviction="FIFO" flushInterval="60000" size="512" readOnly="true"/> 
+  
+  <!-- 和其他namespace共享二级缓存 	-->
+  <!-- <cache-ref namespace="com.test.mbg.mapper.TRoleMapper"/> -->
+    
+  <resultMap id="BaseResultMap" type="com.test.mbg.entity.TUser" autoMapping="true"  >
+    <id column="id" property="id" jdbcType="INTEGER" />
+    <result column="user_name" property="userName" jdbcType="VARCHAR" />
+    <result column="real_name" property="realName" jdbcType="VARCHAR" />
+    <result column="sex" property="sex" jdbcType="TINYINT" />
+    <result column="mobile" property="mobile" jdbcType="VARCHAR" />
+    <result column="email" property="email" jdbcType="VARCHAR" />
+    <result column="note" property="note" jdbcType="VARCHAR" />
+    <result column="position_id" property="position.id" jdbcType="INTEGER" />
+  </resultMap>
+  
+  <resultMap id="SomeBaseResultMap" type="com.test.mbg.entity.TUser" >
+    <id column="id" property="id" jdbcType="INTEGER" />
+    <result column="user_name" property="userName" jdbcType="VARCHAR" />
+    <result column="real_name" property="realName" jdbcType="VARCHAR" />
+    <result column="sex" property="sex" jdbcType="TINYINT" />
+    <result column="mobile" property="mobile" jdbcType="VARCHAR" />
+    <result column="email" property="email" jdbcType="VARCHAR" />
+    <result column="note" property="note" jdbcType="VARCHAR" />
+    <!-- <result column="position_id" property="position.id" jdbcType="INTEGER" /> -->
+  </resultMap>
+  
+  
+  <resultMap id="BaseResultMapAsso" extends="BaseResultMap" type="com.test.mbg.entity.TUser" >
+  	<association property="position" javaType="com.test.mbg.entity.TPosition" columnPrefix="post_" >
+  		<id column="id" property="id" jdbcType="INTEGER" />
+  		<result column="name" property="postName" jdbcType="VARCHAR" />
+  		<result column="note" property="note" jdbcType="VARCHAR" />
+  	</association>
+  </resultMap>
+  
+  <select id="selectAssocition" resultMap="BaseResultMapAsso" >
+  	select 
+  		a.id,
+  		a.user_name,
+  		a.real_name,
+  		a.sex,
+  		a.mobile,
+  		a.email,
+  		a.note,
+  		a.position_id,
+  		b.id post_id,
+  		b.post_name post_name,
+  		b.note post_note
+  	from t_user a,t_position b
+  	where a.position_id=b.id
+  </select>
+  
+  <sql id="UserAllColumn">
+  	id,user_name,real_name,sex,mobile,email,note,position_id
+  </sql>
+  
+  <!-- 嵌套查询 fetchType="lazy"、"eager"  -->
+  <resultMap id="ResultMapAssoQuery" extends="SomeBaseResultMap" type="com.test.mbg.entity.TUser" >
+  	<association property="position" javaType="com.test.mbg.entity.TPosition" 
+  				 fetchType="lazy" column="position_id" 
+  				 select="com.test.mbg.mapper.TPositionMapper.selectByPrimaryKey">
+  	</association>
+  </resultMap>
+  
+  <select id="selectAssocition2" resultMap="ResultMapAssoQuery" >
+  	select 
+  		<include refid="UserAllColumn" />
+  	from t_user
+  </select>
+  
+  <!-- 嵌套结果 -->
+  <resultMap id="ResultMapJobsQuery" extends="BaseResultMap" type="com.test.mbg.entity.TUser" >
+  	<collection property="jobs" fetchType="lazy" ofType="com.test.mbg.entity.TJobHistory"
+  				column="id" columnPrefix="job_">
+		<id column="id" property="id" jdbcType="INTEGER" />
+	    <result column="comp_name" property="compName" jdbcType="VARCHAR" />
+	    <result column="years" property="years" jdbcType="INTEGER" />
+	    <result column="title" property="title" jdbcType="VARCHAR" />
+  	</collection>
+  </resultMap>
+  
+  <select id="selectIncludeJobs" resultMap="ResultMapJobsQuery" parameterType="java.lang.Integer">
+  	select 
+  		a.id,a.user_name,a.real_name,a.sex,a.mobile,a.email,a.note,a.position_id,
+  		b.id job_id, b.comp_name job_comp_name, b.years job_years, b.title job_title
+  	from t_user a, t_job_history b
+  	where a.id=#{userId,javaType=Integer}
+  		  and a.id=b.user_id
+  </select>
+  
+  <!-- 鉴别器查询 -->
+  <resultMap id="userAndHealthReportMale" extends="userAndHealthReport" type="com.test.mbg.entity.TUser">
+		<collection property="healthReports" 
+					column="id"
+					select= "com.test.mbg.mapper.THealthReportMaleMapper.selectByUserId"></collection>
+  </resultMap>
+  
+  <resultMap id="userAndHealthReportFemale" extends="userAndHealthReport" type="com.test.mbg.entity.TUser">
+		<collection property="healthReports" 
+					column="id"
+					select= "com.test.mbg.mapper.THealthReportFemaleMapper.selectByUserId"></collection>
+  </resultMap>
+  
+  <resultMap id="userAndHealthReport" extends="SomeBaseResultMap" type="com.test.mbg.entity.TUser">
+	  <discriminator column="sex" javaType="int">
+			<case value="1" resultMap="userAndHealthReportMale"/>
+			<case value="2" resultMap="userAndHealthReportFemale"/>
+	  </discriminator>
+  </resultMap>
+  
+  <select id="selectUserHealthReport" resultMap="userAndHealthReport">
+	  select
+		<include refid="UserAllColumn" />
+	  from t_user
+  </select>
+  
+  <resultMap id="ResultMapRolesQuery" extends="SomeBaseResultMap" type="com.test.mbg.entity.TUser" >
+  	<collection property="roles" ofType="com.test.mbg.entity.TRole"
+  				columnPrefix="role_">
+		<id column="id" property="id" jdbcType="INTEGER" />
+	    <result column="role_name" property="roleName" jdbcType="VARCHAR" />
+	    <result column="note" property="note" jdbcType="VARCHAR" />
+  	</collection>
+  </resultMap>
+  
+  <!-- 多对多-嵌套结果查询 -->
+  <select id="selectUserRolesInfo" resultMap="ResultMapRolesQuery">
+	  select
+		a.id,
+		a.user_name,
+		a.real_name,
+		a.sex,
+		a.mobile,
+		a.email,
+		a.note,
+		c.id role_id,
+		c.role_name role_role_name,
+		c.note role_note
+	  from t_user a, t_user_role b, t_role c
+	  where a.id = b.user_id
+	  		and b.role_id = c.id
+  </select>
+  
+  <!-- 多对多-嵌套查询 -->
+  <select id="selectUserByRoleId" resultMap="SomeBaseResultMap" parameterType="java.lang.Integer">
+	  select
+		a.id,
+		a.user_name,
+		a.real_name,
+		a.sex,
+		a.mobile,
+		a.email,
+		a.note
+	  from 
+	  	t_user a, t_user_role b
+	  where 
+	  	a.id = b.user_id
+	  	and b.role_id = #{id,javaType=Integer}
+  </select>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Integer" >
+    delete from t_user
+    where id = #{id,jdbcType=INTEGER}
+  </delete>
+  <insert id="insert" parameterType="com.test.mbg.entity.TUser" >
+    <selectKey resultType="java.lang.Integer" keyProperty="id" order="BEFORE" >
+      SELECT LAST_INSERT_ID()
+    </selectKey>
+    insert into t_user (id, user_name, real_name, 
+      sex, mobile, email, 
+      note, position_id)
+    values (#{id,jdbcType=INTEGER}, #{userName,jdbcType=VARCHAR}, #{realName,jdbcType=VARCHAR}, 
+      #{sex,jdbcType=TINYINT}, #{mobile,jdbcType=VARCHAR}, #{email,jdbcType=VARCHAR}, 
+      #{note,jdbcType=VARCHAR}, #{positionId,jdbcType=INTEGER})
+  </insert>
+  <update id="updateByPrimaryKey" parameterType="com.test.mbg.entity.TUser" >
+    update t_user
+    set user_name = #{userName,jdbcType=VARCHAR},
+      real_name = #{realName,jdbcType=VARCHAR},
+      sex = #{sex,jdbcType=TINYINT},
+      mobile = #{mobile,jdbcType=VARCHAR},
+      email = #{email,jdbcType=VARCHAR},
+      note = #{note,jdbcType=VARCHAR},
+      position_id = #{positionId,jdbcType=INTEGER}
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <select id="selectByPrimaryKey" resultMap="BaseResultMap" parameterType="java.lang.Integer" >
+    select id, user_name, real_name, sex, mobile, email, note, position_id
+    from t_user
+    where id = #{id,jdbcType=INTEGER}
+  </select>
+  <select id="selectAll" resultMap="BaseResultMap" >
+    select id, user_name, real_name, sex, mobile, email, note, position_id
+    from t_user
+  </select>
+</mapper>
